@@ -27,7 +27,7 @@ public class VarnishMonitor extends AManagedMonitor {
 
     public static void main(String[] args) throws Exception{
 		Map<String, String> taskArguments = new HashMap<String, String>();
-        taskArguments.put("host", "");
+        taskArguments.put("host", "localhost");
         taskArguments.put("port", "6085");
         taskArguments.put("username", "");
         taskArguments.put("password", "");
@@ -63,7 +63,7 @@ public class VarnishMonitor extends AManagedMonitor {
             logger.info("Exceuting VarnishMonitor...");
             VarnishWrapper varnishWrapper = new VarnishWrapper(taskArguments);
             Map metrics = varnishWrapper.gatherMetrics();
-            logger.info("Gathered metrics successfully. Size of metrics: " + metrics.size());
+            logger.info("Gathered metrics successfully");
             printMetrics(metrics);
             logger.info("Printed metrics successfully");
             return new TaskOutput("Task successful...");
@@ -143,7 +143,9 @@ public class VarnishMonitor extends AManagedMonitor {
             logger.error("Could not parse metric name");
             throw e;
         } finally {
-            configFile.close();
+            if (configFile != null) {
+                configFile.close();
+            }
         }
     }
 }
