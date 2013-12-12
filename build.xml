@@ -15,6 +15,7 @@
         <javac destdir="${build.dir}/classes" source="1.5" target="1.5" srcdir="src/" classpathref="myClassPath" debug="on"/>
         <mkdir dir="${build.dir}/VarnishMonitor"/>
         <mkdir dir="${build.dir}/VarnishMonitor/lib"/>
+        <mkdir dir="${build.dir}/VarnishMonitor/conf"/>
 
         <jar destfile="${build.dir}/VarnishMonitor/${project.name}.jar">
             <fileset dir="${build.dir}/classes"/>
@@ -27,6 +28,9 @@
         </copy>
         <copy todir="${build.dir}/VarnishMonitor/">
             <fileset dir="${conf.dir}" includes="monitor.xml"/>
+        </copy>
+        <copy todir="${build.dir}/VarnishMonitor/conf">
+            <fileset dir="${conf.dir}" excludes="monitor.xml"/>
         </copy>
         <delete dir="${build.dir}/classes"/>
     </target>

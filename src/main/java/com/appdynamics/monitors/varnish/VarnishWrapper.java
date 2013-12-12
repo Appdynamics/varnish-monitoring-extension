@@ -2,16 +2,12 @@ package com.appdynamics.monitors.varnish;
 
 import com.google.gson.*;
 import org.apache.http.HttpResponse;
-import org.apache.http.NameValuePair;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.HttpClient;
 import org.apache.http.HttpEntity;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.message.BasicNameValuePair;
 import org.apache.log4j.Logger;
 
 import java.io.BufferedReader;
@@ -27,20 +23,24 @@ public class VarnishWrapper {
     private String port;
     private String username;
     private String password;
-    private String filePath;
 
     public VarnishWrapper(Map<String, String> taskArguments) {
         this.host = taskArguments.get("host");
         this.port = taskArguments.get("port");
         this.username = taskArguments.get("username");
         this.password = taskArguments.get("password");
-        this.filePath = taskArguments.get("filePath");
     }
 
+    /**
+     * Uses the Varnish's REST API to retrieve JSON response containing Varnish metrics and then converts the response into a map of metrics
+     * @return  Map containing metrics for Varnish
+     * @throws  Exception
+     */
     public Map gatherMetrics() throws Exception{
         try {
             JsonObject responseData = getResponseData();
-            return new HashMap();
+            HashMap metrics = constructMetricsMap(responseData);
+            return metrics;
         } catch(MalformedURLException e) {
             logger.error("Invalid URL used to connect to Boundary");
             throw e;
@@ -52,6 +52,11 @@ public class VarnishWrapper {
         }
     }
 
+    /**
+     * Gets the JsonObject by parsing the JSON return from hitting the /stats url
+     * @return  JsonObject containing the response from hitting the /stats url for Varnish
+     * @throws  Exception
+     */
     private JsonObject getResponseData() throws Exception{
         String metricsURL = constructVarnishStatsURL();
         HttpGet httpGet = new HttpGet(metricsURL);
@@ -72,9 +77,35 @@ public class VarnishWrapper {
         return responseData;
     }
 
+    /**
+     * Constructs the metrics hashmap by iterating over the JSON response retrieved from the /stats url
+     * @param   responseData the JSON response retrieved from hitting the /stats url
+     * @return  HashMap containing all metrics for Varnish
+     * @throws  Exception
+     */
+    private HashMap<String, Long> constructMetricsMap(JsonObject responseData) throws Exception{
+        HashMap<String, Long> metrics = new HashMap<String, Long>();
+        Iterator iterator = responseData.entrySet().iterator();
+
+        while (iterator.hasNext()) {
+            Map.Entry<String, JsonElement> entry = (Map.Entry<String, JsonElement>) iterator.next();
+            if (!entry.getValue().isJsonPrimitive()) {
+                String metricName = entry.getKey();
+                JsonObject metricObject = entry.getValue().getAsJsonObject();
+                Long metricValue = metricObject.get("value").getAsLong();
+                metrics.put(metricName, metricValue);
+            }
+        }
+        return metrics;
+    }
+
+    /**
+     * Constructs the varnish statistics url, which returns JSON for the metrics
+     * @return Varnish statistics url
+     */
     private String constructVarnishStatsURL() {
         return new StringBuilder()
-                .append("https://")
+                .append("http://")
                 .append(host)
                 .append(":")
                 .append(port)
