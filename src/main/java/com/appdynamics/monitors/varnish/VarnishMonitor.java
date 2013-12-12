@@ -17,8 +17,11 @@ public class VarnishMonitor extends AManagedMonitor {
 
     public static void main(String[] args) throws Exception{
 		Map<String, String> taskArguments = new HashMap<String, String>();
-        taskArguments.put("org-id", "");
-        taskArguments.put("api-key", "");
+        taskArguments.put("host", "localhost");
+        taskArguments.put("port", "6085");
+        taskArguments.put("username", "rohitv");
+        taskArguments.put("password", "Escaflowne1");
+        taskArguments.put("enabled-metrics-path", "conf/EnabledMetrics.xml");
 
         VarnishMonitor varnishMonitor = new VarnishMonitor();
         varnishMonitor.execute(taskArguments, null);
