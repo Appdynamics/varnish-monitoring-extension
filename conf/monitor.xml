@@ -17,10 +17,10 @@
                 </java-task>
                 <task-arguments>
                     <argument name="host" is-required="true" default-value="localhost"/>
-                    <argument name="port" is-required="false" default-value="6085"/>
-                    <argument name="username" is-required="false" default-value=""/>
-                    <argument name="password" is-required="false" default-value=""/>
-                    <argument name="enabled-metrics-path" is-required="false" default-value="monitors/VarnishMonitor/conf/EnabledMetrics.xml"/>
+                    <argument name="port" is-required="true" default-value="6085"/>
+                    <argument name="username" is-required="true" default-value=""/>
+                    <argument name="password" is-required="true" default-value=""/>
+                    <argument name="enabled-metrics-path" is-required="true" default-value="monitors/VarnishMonitor/conf/EnabledMetrics.xml"/>
                 </task-arguments>
         </monitor-run-task>
 </monitor>
