@@ -42,8 +42,8 @@ public class VarnishMonitor extends AManagedMonitor {
 
     /**
      * Initializes the list of enabled metrics by reading the configuration file specified in monitor.xml
-     * @param taskArguments
-     * @throws Exception
+     * @param   taskArguments contains map of arguments read from monitor.xml
+     * @throws  Exception
      */
     private void initialize(Map<String, String> taskArguments) throws Exception{
         if (!isInitialized) {
@@ -60,7 +60,7 @@ public class VarnishMonitor extends AManagedMonitor {
     public TaskOutput execute(Map<String, String> taskArguments, TaskExecutionContext taskExecutionContext) throws TaskExecutionException {
         try {
             initialize(taskArguments);
-            logger.info("Exceuting VarnishMonitor...");
+            logger.info("Executing VarnishMonitor...");
             VarnishWrapper varnishWrapper = new VarnishWrapper(taskArguments);
             Map metrics = varnishWrapper.gatherMetrics();
             logger.info("Gathered metrics successfully");
@@ -68,7 +68,6 @@ public class VarnishMonitor extends AManagedMonitor {
             logger.info("Printed metrics successfully");
             return new TaskOutput("Task successful...");
         } catch (Exception e) {
-            e.printStackTrace();
             logger.error("Exception: ", e);
         }
         return new TaskOutput("Task failed with errors");
@@ -78,7 +77,7 @@ public class VarnishMonitor extends AManagedMonitor {
      * Writes the Varnish metrics to the controller
      * @param 	metricsMap		HashMap containing all metrics for Varnish
      */
-    private void printMetrics(Map metricsMap) throws Exception{
+    private void printMetrics(Map metricsMap) throws Exception {
         Iterator metricIterator = metricsMap.keySet().iterator();
         while (metricIterator.hasNext()) {
             String metricName = metricIterator.next().toString();
@@ -100,8 +99,7 @@ public class VarnishMonitor extends AManagedMonitor {
      * @param 	timeRollup		Average OR Current OR Sum
      * @param 	cluster			Collective OR Individual
      */
-    private void printMetric(String metricName, Long metricValue, String aggregation, String timeRollup, String cluster) throws Exception
-    {
+    private void printMetric(String metricName, Long metricValue, String aggregation, String timeRollup, String cluster) throws Exception {
         MetricWriter metricWriter = super.getMetricWriter(metricName,
                 aggregation,
                 timeRollup,
