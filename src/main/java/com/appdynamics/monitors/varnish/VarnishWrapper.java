@@ -38,7 +38,7 @@ public class VarnishWrapper {
      */
     public Map gatherMetrics() throws Exception{
         if (host.equals("") || port.equals("") || username.equals("") || password.equals("")) {
-            throw new Exception("Either host, port, username, or password is configured incorrectly");
+            throw new Exception("Either host, port, username, and/or password are empty");
         }
         try {
             JsonObject responseData = getResponseData();
