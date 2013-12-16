@@ -45,7 +45,7 @@ public class VarnishWrapper {
             HashMap metrics = constructMetricsMap(responseData);
             return metrics;
         } catch(MalformedURLException e) {
-            logger.error("Invalid URL used to connect to Boundary");
+            logger.error("Invalid URL used to connect to Varnish");
             throw e;
         } catch(JsonSyntaxException e) {
             logger.error("Error parsing the Json response");
