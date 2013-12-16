@@ -32,11 +32,14 @@ public class VarnishWrapper {
     }
 
     /**
-     * Uses the Varnish's REST API to retrieve JSON response containing Varnish metrics and then converts the response into a map of metrics
+     * Uses Varnish's REST API to retrieve JSON response containing Varnish metrics and then converts the response into a map of metrics
      * @return  Map containing metrics for Varnish
      * @throws  Exception
      */
     public Map gatherMetrics() throws Exception{
+        if (host.equals("") || port.equals("") || username.equals("") || password.equals("")) {
+            throw new Exception("Either host, port, username, or password is configured incorrectly");
+        }
         try {
             JsonObject responseData = getResponseData();
             HashMap metrics = constructMetricsMap(responseData);
