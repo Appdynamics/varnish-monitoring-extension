@@ -18,11 +18,11 @@ Varnish Cache is a web application accelerator also known as a caching HTTP reve
 	<li>Open &lt;machineagent install dir&gt;/monitors/VarnishMonitor/monitor.xml and configure the Varnish parameters.
 <p></p>
 <pre>
-	 &lt;argument name="host" is-required="false" default-value="localhost"/&gt;
-     &lt;argument name="port" is-required="false" default-value="6085"/&gt;
-     &lt;argument name="username" is-required="false" default-value="username"/&gt;
-     &lt;argument name="password" is-required="false" default-value="password"/&gt;
-     &lt;argument name="disabled-metrics-path" is-required="false" default-value="monitors/VarnishMonitor/conf/EnabledMetrics.xml"/&gt;
+	 &lt;argument name="host" is-required="true" default-value="localhost"/&gt;
+     &lt;argument name="port" is-required="true" default-value="6085"/&gt;
+     &lt;argument name="username" is-required="true" default-value="username"/&gt;
+     &lt;argument name="password" is-required="true" default-value="password"/&gt;
+     &lt;argument name="enabled-metrics-path" is-required="true" default-value="monitors/VarnishMonitor/conf/EnabledMetrics.xml"/&gt;
 </pre>
 	</li>
 	<li>Open &lt;machineagent install dir&gt;/monitors/VarnishMonitor/conf/EnabledMetrics.xml and configure the list of enabled metrics. Here is a sample configuration of the enabled metrics:
