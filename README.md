@@ -50,7 +50,7 @@ Varnish Cache is a web application accelerator also known as a caching HTTP reve
 
 ## Metrics
 
-NOTE: Based on the default EnabledMetrics.xml configuration, only metrics from "client_conn" to "dir_dns_cache_full" will be reported. This can be changed in the EnabledMetrics.xml file.
+NOTE: By default, only metrics from "client_conn" to "dir_dns_cache_full" in the following list are reported. This can be changed in the EnabledMetrics.xml file.
 
 | Metric Name | Description |
 |----------------|-------------|
@@ -266,7 +266,7 @@ Always feel free to fork and contribute any changes directly here on GitHub.
 
 ##Community
 
-Find out more in the [AppSphere](http://appsphere.appdynamics.com/) community.
+Find out more in the [AppSphere](http://appsphere.appdynamics.com/t5/eXchange/Varnish-Monitoring-Extension/idi-p/5617) community.
 
 ##Support
 
