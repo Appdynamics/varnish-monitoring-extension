@@ -50,7 +50,7 @@ Varnish Cache is a web application accelerator also known as a caching HTTP reve
 
 ## Metrics
 
-Refer to the metric table in this wiki page: https://singularity.jira.com/wiki/display/ACE/Varnish+Monitoring+Extension+Design+Specs
+(information forthcoming)
 
 ## Custom Dashboard
 
@@ -58,11 +58,11 @@ Refer to the metric table in this wiki page: https://singularity.jira.com/wiki/d
 
 ##Contributing
 
-Always feel free to fork and contribute any changes directly via [GitHub](https://github.com/Appdynamics/varnish-monitoring-extension).
+Always feel free to fork and contribute any changes directly here on GitHub.
 
 ##Community
 
-Find out more in the [AppSphere](http://appsphere.appdynamics.com/t5/eXchange/Varnish-Monitoring-Extension/idi-p/4851) community.
+Find out more in the [AppSphere](http://appsphere.appdynamics.com/) community.
 
 ##Support
 
