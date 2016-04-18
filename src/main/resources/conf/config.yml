@@ -1,0 +1,38 @@
+varnish:
+  - name: "LocalVarnish"
+    host: "localhost"
+    port: 6085
+    scheme: "http"
+    username: "admin"
+# Provide either password or passwordEncrypted and encryptionKey
+    password: "admin"
+    passwordEncrypted: ""
+    encryptionKey: ""
+    enabledMetricsPath: "monitors/VarnishMonitor/EnabledMetrics.xml"
+    proxyConfig:
+      uri:
+      username:
+      password:
+  - name: "RemoteVarnish"
+    host: "localhost"
+    port: 6085
+    scheme: "http"
+    username: "admin"
+    password: "admin"
+    passwordEncrypted: ""
+    encryptionKey: ""
+    enabledMetricsPath: "monitors/VarnishMonitor/EnabledMetrics.xml"
+    proxyConfig:
+      uri:
+      username:
+      password:
+
+# Number of concurrent threads for
+# dealing with multiple Varnish instances
+# Note: You don't necessarily have to match the no of threads
+# to the no of Varnish instances configured above
+# unless you have a lot of CPUs in your machine
+numberOfVarnishThreads: 2
+
+#prefix used to show up metrics in AppDynamics
+metricPrefix: "Custom Metrics|Varnish|"

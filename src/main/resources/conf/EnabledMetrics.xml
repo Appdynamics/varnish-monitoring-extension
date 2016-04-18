@@ -1,0 +1,28 @@
+<!-- Only metrics present here will be shown in the Controller. Remaining metrics will be ignored -->
+<EnabledMetrics>
+   <!-- <Metric name="timestamp"/> -->
+   <Metric name="MAIN.uptime"/>
+   <Metric name="MAIN.pools"/>
+   <Metric name="MAIN.threads"/>
+   <Metric name="MAIN.threads_created"/>
+   <Metric name="MAIN.n_backend"/>
+   <Metric name="MAIN.shm_records"/>
+   <Metric name="MAIN.shm_writes"/>
+   <Metric name="MAIN.n_vcl"/>
+   <Metric name="MAIN.n_vcl_avail"/>
+   <Metric name="MAIN.bans"/>
+   <Metric name="MAIN.bans_completed"/>
+   <Metric name="MAIN.bans_added"/>
+   <Metric name="MAIN.bans_persisted_bytes"/>
+   <Metric name="MAIN.vsm_free"/>
+   <Metric name="MAIN.vsm_used"/>
+   <Metric name="MGT.uptime"/>
+   <Metric name="MGT.child_start"/>
+   <Metric name="MEMPOOL.busyobj.pool"/>
+   <Metric name="MEMPOOL.busyobj.sz_wanted"/>
+   <Metric name="MEMPOOL.busyobj.sz_actual"/>
+   <Metric name="MEMPOOL.req0.pool"/>
+   <Metric name="MEMPOOL.req0.sz_wanted"/>
+   <Metric name="MEMPOOL.req0.sz_actual"/>
+
+</EnabledMetrics>

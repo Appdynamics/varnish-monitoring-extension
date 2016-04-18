@@ -1,107 +1,256 @@
-/** 
-* Copyright 2013 AppDynamics 
-* 
-* Licensed under the Apache License, Version 2.0 (the License);
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-* 
-* http://www.apache.org/licenses/LICENSE-2.0
-* 
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an AS IS BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+/**
+ * Copyright 2013 AppDynamics
+ * <p/>
+ * Licensed under the Apache License, Version 2.0 (the License);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an AS IS BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.appdynamics.monitors.varnish;
 
-import com.google.gson.*;
-import org.apache.http.HttpResponse;
+import com.appdynamics.TaskInputArgs;
+import com.appdynamics.extensions.crypto.CryptoUtil;
+import com.appdynamics.extensions.http.Http4ClientBuilder;
+import com.appdynamics.monitors.varnish.config.ProxyConfig;
+import com.appdynamics.monitors.varnish.config.Varnish;
+import com.google.common.collect.Maps;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.singularity.ee.agent.systemagent.api.MetricWriter;
+import com.singularity.ee.agent.systemagent.api.exception.TaskExecutionException;
+import org.apache.commons.lang.StringUtils;
+import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.HttpClient;
-import org.apache.http.HttpEntity;
+import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.auth.BasicScheme;
-import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.config.Registry;
+import org.apache.http.config.RegistryBuilder;
+import org.apache.http.conn.socket.ConnectionSocketFactory;
+import org.apache.http.conn.socket.PlainConnectionSocketFactory;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.SSLContextBuilder;
+import org.apache.http.conn.ssl.TrustStrategy;
+import org.apache.http.conn.ssl.X509HostnameVerifier;
+import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 
-import java.io.BufferedReader;
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.MalformedURLException;
-import java.util.*;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-public class VarnishWrapper {
+public class VarnishWrapper implements Runnable {
 
     private static final Logger logger = Logger.getLogger(VarnishWrapper.class.getSimpleName());
-    private String host;
-    private String port;
-    private String username;
-    private String password;
+    private static final String METRIC_SEPARATOR = "|";
 
-    public VarnishWrapper(Map<String, String> taskArguments) {
-        this.host = taskArguments.get("host");
-        this.port = taskArguments.get("port");
-        this.username = taskArguments.get("username");
-        this.password = taskArguments.get("password");
+    private Varnish varnish;
+    private Set<String> enabledMetrics;
+    private VarnishMonitor monitor;
+    private String metricPrefix;
+
+    private CloseableHttpClient httpClient;
+    private HttpClientContext httpContext;
+
+    public VarnishWrapper(VarnishMonitor monitor, Varnish varnish, Set<String> enabledMetrics, String metricPrefix) throws TaskExecutionException {
+        this.varnish = varnish;
+        this.enabledMetrics = enabledMetrics;
+        this.monitor = monitor;
+        this.metricPrefix = metricPrefix;
+
+        createHTTPClient();
+    }
+
+    private void createHTTPClient() throws TaskExecutionException {
+
+        Map map = new HashMap();
+        List<Map<String, String>> list = new ArrayList<Map<String, String>>();
+        map.put("servers", list);
+        HashMap<String, String> server = new HashMap<String, String>();
+        server.put("uri", varnish.getScheme() + "://" + varnish.getHost());
+        server.put("username", varnish.getUsername());
+        server.put("password", getPassword());
+        list.add(server);
+
+        ProxyConfig proxyConfig = varnish.getProxyConfig();
+        if (proxyConfig != null) {
+            HashMap<String, String> proxyProps = new HashMap<String, String>();
+            map.put("proxy", proxyProps);
+            proxyProps.put("uri", proxyConfig.getUri());
+            proxyProps.put("username", proxyConfig.getUsername());
+            proxyProps.put("password", proxyConfig.getPassword());
+        }
+
+
+        //Workaround to ignore the certificate mismatch issue.
+        SSLContext sslContext = null;
+        try {
+            sslContext = new SSLContextBuilder().loadTrustMaterial(null, new TrustStrategy() {
+                public boolean isTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
+                    return true;
+                }
+            }).build();
+        } catch (NoSuchAlgorithmException e) {
+            logger.error("Unable to create SSL context", e);
+            throw new TaskExecutionException("Unable to create SSL context", e);
+        } catch (KeyManagementException e) {
+            logger.error("Unable to create SSL context", e);
+            throw new TaskExecutionException("Unable to create SSL context", e);
+        } catch (KeyStoreException e) {
+            logger.error("Unable to create SSL context", e);
+            throw new TaskExecutionException("Unable to create SSL context", e);
+        }
+        HostnameVerifier hostnameVerifier = SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER;
+
+        SSLConnectionSocketFactory sslSocketFactory = new SSLConnectionSocketFactory(sslContext, (X509HostnameVerifier) hostnameVerifier);
+        Registry<ConnectionSocketFactory> socketFactoryRegistry = RegistryBuilder.<ConnectionSocketFactory>create()
+                .register("http", PlainConnectionSocketFactory.getSocketFactory())
+                .register("https", sslSocketFactory)
+                .build();
+
+        PoolingHttpClientConnectionManager connMgr = new PoolingHttpClientConnectionManager(socketFactoryRegistry);
+
+        HttpClientBuilder builder = Http4ClientBuilder.getBuilder(map);
+        builder.setConnectionManager(connMgr);
+
+        CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+        credentialsProvider.setCredentials(AuthScope.ANY,
+                new UsernamePasswordCredentials(varnish.getUsername(), getPassword()));
+
+        httpClient = builder.setSSLSocketFactory(sslSocketFactory).setDefaultCredentialsProvider(credentialsProvider).build();
+
+        httpContext = HttpClientContext.create();
+        httpContext.setCredentialsProvider(credentialsProvider);
+
+    }
+
+    private String getPassword() {
+        String password = null;
+
+        if (StringUtils.isNotBlank(varnish.getPassword())) {
+            password = varnish.getPassword();
+
+        } else {
+            try {
+                Map<String, String> args = Maps.newHashMap();
+                args.put(TaskInputArgs.PASSWORD_ENCRYPTED, varnish.getPasswordEncrypted());
+                args.put(TaskInputArgs.ENCRYPTION_KEY, varnish.getEncryptionKey());
+                password = CryptoUtil.getPassword(args);
+
+            } catch (IllegalArgumentException e) {
+                String msg = "Encryption Key not specified. Please set the value in config.yaml.";
+                logger.error(msg);
+                throw new IllegalArgumentException(msg);
+            }
+        }
+
+        return password;
+    }
+
+
+    @Override
+    public void run() {
+        try {
+            gatherAndPrintMetrics();
+        } catch (TaskExecutionException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
      * Uses Varnish's REST API to retrieve JSON response containing Varnish metrics and then converts the response into a map of metrics
-     * @return  Map containing metrics for Varnish
-     * @throws  Exception
+     *
      */
-    public Map gatherMetrics() throws Exception{
-        if (host.equals("") || port.equals("") || username.equals("") || password.equals("")) {
-            throw new Exception("Either host, port, username, and/or password are empty");
+    private void gatherAndPrintMetrics() throws TaskExecutionException {
+        if ("".equals(varnish.getHost()) || varnish.getPort() == null || "".equals(varnish.getUsername()) || "".equals(varnish.getPassword())) {
+            throw new TaskExecutionException("Either host, port, username, and/or password are empty");
         }
-        try {
-            JsonObject responseData = getResponseData();
+
+
+        String response = getResponse();
+        if (response != null) {
+            JsonObject responseData = new JsonParser().parse(response.toString()).getAsJsonObject();
             HashMap metrics = constructMetricsMap(responseData);
-            return metrics;
-        } catch(MalformedURLException e) {
-            logger.error("Invalid URL used to connect to Varnish");
-            throw e;
-        } catch(JsonSyntaxException e) {
-            logger.error("Error parsing the Json response");
-            throw e;
-        } catch(IOException e) {
-            throw e;
+            printMetrics(metrics);
+        } else {
+            logger.info("Received empty response from varnish");
         }
     }
 
-    /**
-     * Gets the JsonObject by parsing the JSON return from hitting the /stats url
-     * @return  JsonObject containing the response from hitting the /stats url for Varnish
-     * @throws  Exception
-     */
-    private JsonObject getResponseData() throws Exception{
+    private String getResponse() {
         String metricsURL = constructVarnishStatsURL();
         HttpGet httpGet = new HttpGet(metricsURL);
-        httpGet.addHeader(BasicScheme.authenticate(
-                new UsernamePasswordCredentials(username, password),
-                "UTF-8", false));
+        CloseableHttpResponse response = null;
+        try {
+            response = httpClient.execute(httpGet, httpContext);
 
-        HttpClient httpClient = new DefaultHttpClient();
-        HttpResponse response = httpClient.execute(httpGet);
-        HttpEntity entity = response.getEntity();
-        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(entity.getContent()));
-        StringBuilder responseString = new StringBuilder();
-        String line = "";
-        while ((line = bufferedReader.readLine()) != null) {
-            responseString.append(line);
+            int statusCode = response.getStatusLine().getStatusCode();
+            if (statusCode == 200) {
+                logger.debug("Successfully executed [" + httpGet.getMethod() + "] on [" + httpGet.getURI() + "]");
+
+                return EntityUtils.toString(response.getEntity());
+
+            }
+            logger.info("Received error response [" + statusCode + "] while executing [" + httpGet.getMethod() + "] on [" + httpGet.getURI() + "]");
+            if (logger.isDebugEnabled()) {
+                logger.debug("Response received [ " + EntityUtils.toString(response.getEntity()) + " ]");
+            }
+
+        } catch (Exception e) {
+            logger.error("Error executing [" + httpGet.getMethod() + "] on [" + httpGet.getURI() + "]", e);
+        } finally {
+            if (response != null) {
+                try {
+                    response.close();
+                } catch (IOException e) {
+                    logger.error("Error while closing the response", e);
+                }
+            }
+
+            if (httpClient != null) {
+
+                try {
+                    httpClient.close();
+                } catch (IOException e) {
+                    logger.error("Error while closing the connection", e);
+                }
+
+            }
         }
-        JsonObject responseData = new JsonParser().parse(responseString.toString()).getAsJsonObject();
-        return responseData;
+        return null;
     }
 
     /**
      * Constructs the metrics hashmap by iterating over the JSON response retrieved from the /stats url
-     * @param   responseData the JSON response retrieved from hitting the /stats url
-     * @return  HashMap containing all metrics for Varnish
-     * @throws  Exception
+     *
+     * @param responseData the JSON response retrieved from hitting the /stats url
+     * @return HashMap containing all metrics for Varnish
      */
-    private HashMap<String, Long> constructMetricsMap(JsonObject responseData) throws Exception{
+    private HashMap<String, Long> constructMetricsMap(JsonObject responseData) {
         HashMap<String, Long> metrics = new HashMap<String, Long>();
         Iterator iterator = responseData.entrySet().iterator();
 
@@ -109,26 +258,81 @@ public class VarnishWrapper {
             Map.Entry<String, JsonElement> entry = (Map.Entry<String, JsonElement>) iterator.next();
             if (!entry.getValue().isJsonPrimitive()) {
                 String metricName = entry.getKey();
-                JsonObject metricObject = entry.getValue().getAsJsonObject();
-                Long metricValue = metricObject.get("value").getAsLong();
-                metrics.put(metricName, metricValue);
+                JsonElement value = entry.getValue();
+                if (value instanceof JsonObject) {
+                    JsonObject metricObject = value.getAsJsonObject();
+                    Long metricValue = metricObject.get("value").getAsLong();
+                    metrics.put(metricName, metricValue);
+                }
             }
         }
         return metrics;
     }
 
     /**
+     * Writes the Varnish metrics to the controller
+     *
+     * @param metricsMap HashMap containing all metrics for Varnish
+     */
+    private void printMetrics(Map metricsMap) {
+        Iterator metricIterator = metricsMap.keySet().iterator();
+        while (metricIterator.hasNext()) {
+            String metricName = metricIterator.next().toString();
+            Long metricValue = (Long) metricsMap.get(metricName);
+            if (enabledMetrics.contains(metricName)) {
+                if (metricName.contains(",")) {
+                    metricName = metricName.replace(',', '_');
+                }
+                printMetric(metricPrefix + varnish.getName() + METRIC_SEPARATOR + metricName, metricValue,
+                        MetricWriter.METRIC_AGGREGATION_TYPE_AVERAGE,
+                        MetricWriter.METRIC_TIME_ROLLUP_TYPE_AVERAGE,
+                        MetricWriter.METRIC_CLUSTER_ROLLUP_TYPE_INDIVIDUAL);
+
+            } else {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Ignoring metric " + metricName + " as it is not configured in EnabledMetrics.xml");
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns the metric to the AppDynamics Controller.
+     *
+     * @param metricName  Name of the Metric
+     * @param metricValue Value of the Metric
+     * @param aggregation Average OR Observation OR Sum
+     * @param timeRollup  Average OR Current OR Sum
+     * @param cluster     Collective OR Individual
+     */
+    private void printMetric(String metricName, Long metricValue, String aggregation, String timeRollup, String cluster) {
+        MetricWriter metricWriter = monitor.getMetricWriter(metricName,
+                aggregation,
+                timeRollup,
+                cluster
+        );
+        metricWriter.printMetric(String.valueOf(metricValue));
+
+        if (logger.isDebugEnabled()) {
+            logger.debug(String.format("Sending metric = %s = %s", metricName, metricValue));
+        }
+    }
+
+    /**
      * Constructs the varnish statistics url, which returns JSON for the metrics
+     *
      * @return Varnish statistics url
      */
     private String constructVarnishStatsURL() {
         return new StringBuilder()
                 .append("http://")
-                .append(host)
+                .append(varnish.getHost())
                 .append(":")
-                .append(port)
+                .append(varnish.getPort())
                 .append("/stats")
                 .toString();
     }
+
+
 }
 
