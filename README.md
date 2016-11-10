@@ -7,50 +7,128 @@ This extension works only with the standalone machine agent.
 
 Varnish Cache is a web application accelerator also known as a caching HTTP reverse proxy. You install it in front of any server that speaks HTTP and configure it to cache the contents. The varnish-monitoring-extension gathers cache metrics exposed through Varnish's REST API and sends them to the AppDynamics Metric Browser.
 
+## Prerequisites
+
+This extension requires vagent2 to be installed. Please follow the steps in  https://github.com/varnish /vagent2/blob/master/INSTALL.rst to install vagent2. You can also install vagent2 from the attached binary file.
+
+
 ## Installation
 <ol>
-	<li>Type 'ant package' in the command line from the varnish-monitoring-extension directory.
+	<li>Type 'mvn clean install' in the command line from the varnish-monitoring-extension directory.
 	</li>
 	<li>Deploy the file VarnishMonitor.zip found in the 'dist' directory into the &lt;machineagent install dir&gt;/monitors/ directory.
 	</li>
 	<li>Unzip the deployed file.
 	</li>
-	<li>Open &lt;machineagent install dir&gt;/monitors/VarnishMonitor/monitor.xml and configure the Varnish parameters.
-<p></p>
-<pre>
-	 &lt;argument name="host" is-required="true" default-value="localhost"/&gt;
-     &lt;argument name="port" is-required="true" default-value="6085"/&gt;
-     &lt;argument name="username" is-required="true" default-value="username"/&gt;
-     &lt;argument name="password" is-required="true" default-value="password"/&gt;
-     &lt;argument name="enabled-metrics-path" is-required="true" default-value="monitors/VarnishMonitor/conf/EnabledMetrics.xml"/&gt;
-</pre>
-	</li>
-	<li>Open &lt;machineagent install dir&gt;/monitors/VarnishMonitor/conf/EnabledMetrics.xml and configure the list of enabled metrics. Here is a sample configuration of the enabled metrics:
-<p></p>
-<pre>
-	 &lt;Metric name="mem_free"/&gt;
-	 &lt;Metric name="mem_total"/&gt;
-</pre>
-	</li>	
+	<li>Configure details in &lt;machineagent install dir&gt;/monitors/VarnishMonitor/config.yml </li>
+	<li>Configure metrics to collect in &lt;machineagent install dir&gt;/monitors/VarnishMonitor/EnabledMetrics.xml </li>
 	<li> Restart the machine agent.
 	</li>
 	<li>In the AppDynamics Metric Browser, look for: Application Infrastructure Performance | &lt;Tier&gt; | Custom Metrics | Varnish
 	</li>
 </ol>
 
-## Directory Structure
+## Configuration
 
-| Directory/File | Description |
-|----------------|-------------|
-|conf            | Contains the monitor.xml, EnabledMetrics.xml |
-|lib             | Contains third-party project references |
-|src             | Contains source code of the Varnish monitoring extension |
-|dist            | Only obtained when using ant. Run 'ant build' to get binaries. Run 'ant package' to get the distributable .zip file |
-|build.xml       | Ant build script to package the project (required only if changing Java code) |
+Note : Please make sure to not use tab (\t) while editing yaml files. You may want to validate the yaml file using a [yaml validator](http://yamllint.com/)
+
+1. Configure the Varnish Vagent2 details by editing the config.yml file in `<MACHINE_AGENT_HOME>/monitors/VarnishMonitor/`.
+2. Below is the default config.yml
+   
+   ```
+varnish:
+  - name: "LocalVarnish"
+    host: "localhost"
+    port: 6085
+    scheme: "http"
+    username: "admin"
+    # Provide either password or passwordEncrypted and encryptionKey
+    password: "admin"
+    passwordEncrypted: ""
+    encryptionKey: ""
+    enabledMetricsPath: "monitors/VarnishMonitor/EnabledMetrics.xml"
+    proxyConfig:
+      uri:
+      username:
+      password:
+  - name: "RemoteVarnish"
+    host: "localhost"
+    port: 6085
+    scheme: "http"
+    username: "admin"
+    password: "admin"
+    passwordEncrypted: ""
+    encryptionKey: ""
+    enabledMetricsPath: "monitors/VarnishMonitor/EnabledMetrics.xml"
+    proxyConfig:
+      uri:
+      username:
+      password:
+
+# Number of concurrent threads for
+# dealing with multiple Varnish instances
+# Note: You don't necessarily have to match the no of threads
+# to the no of Varnish instances configured above
+# unless you have a lot of CPUs in your machine
+numberOfVarnishThreads: 2
+
+
+#This will create this metric in all the tiers, under this path
+metricPrefix: "Custom Metrics|Varnish|"
+
+#This will create it in specific Tier/Component. Make sure to replace <COMPONENT_ID> with the appropriate one from your environment.
+#To find the <COMPONENT_ID> in your environment, please follow the screenshot https://docs.appdynamics.com/display/PRO42/Build+a+Monitoring+Extension+Using+Java
+#metricPrefix: Server|Component:<COMPONENT_ID>|Custom Metrics|Varnish
+   
+```
+3. Default EnabledMetrics.xml
+
+```
+<!-- Only metrics present here will be shown in the Controller. Remaining metrics will be ignored -->
+<EnabledMetrics>
+    <!-- <Metric name="timestamp"/> -->
+    <Metric name="MAIN.uptime" displayName="Uptime"/>
+    <Metric name="MAIN.pools" collectDelta="true" displayName="No Of Pools"/>
+    <Metric name="MAIN.threads" collectDelta="true"/>
+    <Metric name="MAIN.threads_created" collectDelta="true"/>
+    <Metric name="MAIN.n_backend"/>
+    <Metric name="MAIN.shm_records"/>
+    <Metric name="MAIN.shm_writes"/>
+    <Metric name="MAIN.n_vcl"/>
+    <Metric name="MAIN.n_vcl_avail"/>
+    <Metric name="MAIN.bans"/>
+    <Metric name="MAIN.bans_completed"/>
+    <Metric name="MAIN.bans_added"/>
+    <Metric name="MAIN.bans_persisted_bytes"/>
+    <Metric name="MAIN.vsm_free"/>
+    <Metric name="MAIN.vsm_used"/>
+    <Metric name="MGT.uptime"/>
+    <Metric name="MGT.child_start"/>
+    <Metric name="MEMPOOL.busyobj.pool"/>
+    <Metric name="MEMPOOL.busyobj.sz_wanted"/>
+    <Metric name="MEMPOOL.busyobj.sz_actual"/>
+    <Metric name="MEMPOOL.req0.pool"/>
+    <Metric name="MEMPOOL.req0.sz_wanted"/>
+    <Metric name="MEMPOOL.req0.sz_actual"/>
+
+</EnabledMetrics>
+```
+
+
+## Password Encryption Support
+
+To avoid setting the clear text password in the config.yaml, please follow the process below to encrypt the password
+
+1. Download the util jar to encrypt the password from [https://github.com/Appdynamics/maven-repo/blob/master/releases/com/appdynamics/appd-exts-commons/1.1.2/appd-exts-commons-1.1.2.jar](https://github.com/Appdynamics/maven-repo/blob/master/releases/com/appdynamics/appd-exts-commons/1.1.2/appd-exts-commons-1.1.2.jar) and navigate to the downloaded directory
+2. Encrypt password from the commandline
+`java -cp appd-exts-commons-1.1.2.jar com.appdynamics.extensions.crypto.Encryptor encryptionKey myPassword`
+3. Specify the passwordEncrypted and encryptionKey in config.yaml
 
 ## Metrics
 
-NOTE: By default, only metrics from "client_conn" to "dir_dns_cache_full" in the following list are reported. This can be changed in the EnabledMetrics.xml file.
+NOTE: Only metrics configured in the EnabledMetrics.xml file will be collected. Please add the metrics you want to collect to this file.
+
+Here are some of the varnish metrics available through vagent2.
 
 | Metric Name | Description |
 |----------------|-------------|
