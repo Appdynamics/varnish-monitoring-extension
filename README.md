@@ -78,9 +78,9 @@ metricPrefix: "Custom Metrics|Varnish|"
 
 #This will create it in specific Tier/Component. Make sure to replace <COMPONENT_ID> with the appropriate one from your environment.
 #To find the <COMPONENT_ID> in your environment, please follow the screenshot https://docs.appdynamics.com/display/PRO42/Build+a+Monitoring+Extension+Using+Java
-#metricPrefix: Server|Component:<COMPONENT_ID>|Custom Metrics|Varnish
-   
+#metricPrefix: Server|Component:<COMPONENT_ID>|Custom Metrics|Varnish 
 ```
+
 3. Default EnabledMetrics.xml
 
 ```
@@ -112,6 +112,7 @@ metricPrefix: "Custom Metrics|Varnish|"
     <Metric name="MEMPOOL.req0.sz_actual"/>
 
 </EnabledMetrics>
+
 ```
 
 
