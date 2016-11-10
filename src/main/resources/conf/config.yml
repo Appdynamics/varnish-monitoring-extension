@@ -4,7 +4,7 @@ varnish:
     port: 6085
     scheme: "http"
     username: "admin"
-# Provide either password or passwordEncrypted and encryptionKey
+    # Provide either password or passwordEncrypted and encryptionKey
     password: "admin"
     passwordEncrypted: ""
     encryptionKey: ""

@@ -18,6 +18,7 @@ package com.appdynamics.monitors.varnish;
 import com.appdynamics.TaskInputArgs;
 import com.appdynamics.extensions.crypto.CryptoUtil;
 import com.appdynamics.extensions.http.Http4ClientBuilder;
+import com.appdynamics.monitors.varnish.config.Metric;
 import com.appdynamics.monitors.varnish.config.ProxyConfig;
 import com.appdynamics.monitors.varnish.config.Varnish;
 import com.google.common.collect.Maps;
@@ -69,14 +70,14 @@ public class VarnishWrapper implements Runnable {
     private static final String METRIC_SEPARATOR = "|";
 
     private Varnish varnish;
-    private Set<String> enabledMetrics;
+    private Set<Metric> enabledMetrics;
     private VarnishMonitor monitor;
     private String metricPrefix;
 
     private CloseableHttpClient httpClient;
     private HttpClientContext httpContext;
 
-    public VarnishWrapper(VarnishMonitor monitor, Varnish varnish, Set<String> enabledMetrics, String metricPrefix) throws TaskExecutionException {
+    public VarnishWrapper(VarnishMonitor monitor, Varnish varnish, Set<Metric> enabledMetrics, String metricPrefix) throws TaskExecutionException {
         this.varnish = varnish;
         this.enabledMetrics = enabledMetrics;
         this.monitor = monitor;
@@ -104,7 +105,6 @@ public class VarnishWrapper implements Runnable {
             proxyProps.put("username", proxyConfig.getUsername());
             proxyProps.put("password", proxyConfig.getPassword());
         }
-
 
         //Workaround to ignore the certificate mismatch issue.
         SSLContext sslContext = null;
@@ -167,10 +167,8 @@ public class VarnishWrapper implements Runnable {
                 throw new IllegalArgumentException(msg);
             }
         }
-
         return password;
     }
-
 
     @Override
     public void run() {
@@ -183,18 +181,16 @@ public class VarnishWrapper implements Runnable {
 
     /**
      * Uses Varnish's REST API to retrieve JSON response containing Varnish metrics and then converts the response into a map of metrics
-     *
      */
     private void gatherAndPrintMetrics() throws TaskExecutionException {
         if ("".equals(varnish.getHost()) || varnish.getPort() == null || "".equals(varnish.getUsername()) || "".equals(varnish.getPassword())) {
             throw new TaskExecutionException("Either host, port, username, and/or password are empty");
         }
 
-
         String response = getResponse();
         if (response != null) {
             JsonObject responseData = new JsonParser().parse(response.toString()).getAsJsonObject();
-            HashMap metrics = constructMetricsMap(responseData);
+            Map<String, Long> metrics = constructMetricsMap(responseData);
             printMetrics(metrics);
         } else {
             logger.info("Received empty response from varnish");
@@ -274,26 +270,53 @@ public class VarnishWrapper implements Runnable {
      *
      * @param metricsMap HashMap containing all metrics for Varnish
      */
-    private void printMetrics(Map metricsMap) {
+    private void printMetrics(Map<String, Long> metricsMap) {
         Iterator metricIterator = metricsMap.keySet().iterator();
         while (metricIterator.hasNext()) {
             String metricName = metricIterator.next().toString();
-            Long metricValue = (Long) metricsMap.get(metricName);
-            if (enabledMetrics.contains(metricName)) {
-                if (metricName.contains(",")) {
-                    metricName = metricName.replace(',', '_');
+            Long metricValue = metricsMap.get(metricName);
+            Metric metric = getMetric(metricName);
+            if (metric != null) {
+
+                String metricDisplayName = metric.getDisplayName();
+
+                if (metricDisplayName.contains(",")) {
+                    metricDisplayName = metricDisplayName.replace(',', '_');
                 }
-                printMetric(metricPrefix + varnish.getName() + METRIC_SEPARATOR + metricName, metricValue,
+                printMetric(metricPrefix + varnish.getName() + METRIC_SEPARATOR + metricDisplayName, metricValue,
                         MetricWriter.METRIC_AGGREGATION_TYPE_AVERAGE,
                         MetricWriter.METRIC_TIME_ROLLUP_TYPE_AVERAGE,
                         MetricWriter.METRIC_CLUSTER_ROLLUP_TYPE_INDIVIDUAL);
 
+                if (metric.isCollectDelta()) {
+                    Long prevValue = monitor.getDeltaMetric(varnish.getName() + METRIC_SEPARATOR + metric.getName());
+                    if (prevValue != null) {
+                        printMetric(metricPrefix + varnish.getName() + METRIC_SEPARATOR + metricDisplayName + " Delta", metricValue - prevValue,
+                                MetricWriter.METRIC_AGGREGATION_TYPE_AVERAGE,
+                                MetricWriter.METRIC_TIME_ROLLUP_TYPE_AVERAGE,
+                                MetricWriter.METRIC_CLUSTER_ROLLUP_TYPE_INDIVIDUAL);
+                    }
+
+                    monitor.addDeltaMetric(varnish.getName() + METRIC_SEPARATOR + metric.getName(), metricValue);
+                } else {
+                    monitor.deleteDeltaMetric(varnish.getName() + METRIC_SEPARATOR + metric.getName());
+                }
             } else {
                 if (logger.isDebugEnabled()) {
                     logger.debug("Ignoring metric " + metricName + " as it is not configured in EnabledMetrics.xml");
                 }
             }
         }
+    }
+
+    private Metric getMetric(String metricName) {
+
+        for (Metric metric : enabledMetrics) {
+            if (metric.getName().equals(metricName)) {
+                return metric;
+            }
+        }
+        return null;
     }
 
     /**
@@ -332,7 +355,4 @@ public class VarnishWrapper implements Runnable {
                 .append("/stats")
                 .toString();
     }
-
-
 }
-

@@ -19,7 +19,10 @@ import static com.appdynamics.extensions.yml.YmlReader.readFromFile;
 
 import com.appdynamics.extensions.PathResolver;
 import com.appdynamics.monitors.varnish.config.Configuration;
+import com.appdynamics.monitors.varnish.config.Metric;
 import com.appdynamics.monitors.varnish.config.Varnish;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.singularity.ee.agent.systemagent.api.AManagedMonitor;
 import com.singularity.ee.agent.systemagent.api.TaskExecutionContext;
@@ -30,6 +33,7 @@ import org.apache.log4j.Logger;
 import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
@@ -48,6 +52,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 public class VarnishMonitor extends AManagedMonitor {
 
@@ -57,11 +62,19 @@ public class VarnishMonitor extends AManagedMonitor {
 
     private ExecutorService threadPool;
 
+    /**
+     * Cache to store previous metrics
+     */
+    private Cache<String, Long> previousMetricsMap;
+
     public VarnishMonitor() {
         String logMessage = String.format("Using Varnish Monitor Version [%s]",
                 getImplementationVersion());
         logger.info(logMessage);
         System.out.println(logMessage);
+
+        previousMetricsMap = CacheBuilder.newBuilder()
+                .expireAfterWrite(10, TimeUnit.MINUTES).build();
     }
 
     private static String getImplementationVersion() {
@@ -106,7 +119,7 @@ public class VarnishMonitor extends AManagedMonitor {
             threadPool = createThreadPool(config.getNumberOfVarnishThreads());
 
             for (Varnish varnish : varnishList) {
-                Set<String> enabledMetrics = populateEnabledMetrics(varnish.getEnabledMetricsPath());
+                Set<Metric> enabledMetrics = populateEnabledMetrics(varnish.getEnabledMetricsPath());
                 VarnishWrapper task = new VarnishWrapper(this, varnish, enabledMetrics, config.getMetricPrefix());
                 threadPool.submit(task);
             }
@@ -128,11 +141,11 @@ public class VarnishMonitor extends AManagedMonitor {
      *
      * @param filePath Path to the configuration file
      */
-    private Set<String> populateEnabledMetrics(String filePath) throws Exception {
+    private Set<Metric> populateEnabledMetrics(String filePath) throws Exception {
 
         filePath = resolvePath(filePath);
 
-        Set<String> enabledMetrics = new HashSet<String>();
+        Set<Metric> enabledMetrics = new HashSet<Metric>();
         BufferedInputStream configFile = null;
 
         try {
@@ -141,12 +154,29 @@ public class VarnishMonitor extends AManagedMonitor {
             DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
             Document doc = dBuilder.parse(configFile);
 
-            Element disabledMetricsElement = (Element) doc.getElementsByTagName("EnabledMetrics").item(0);
-            NodeList disabledMetricList = disabledMetricsElement.getElementsByTagName("Metric");
+            Element enabledMetricsElement = (Element) doc.getElementsByTagName("EnabledMetrics").item(0);
+            NodeList enabledMetricList = enabledMetricsElement.getElementsByTagName("Metric");
 
-            for (int i = 0; i < disabledMetricList.getLength(); i++) {
-                Node disabledMetric = disabledMetricList.item(i);
-                enabledMetrics.add(disabledMetric.getAttributes().getNamedItem("name").getTextContent());
+            for (int i = 0; i < enabledMetricList.getLength(); i++) {
+                Node enabledMetric = enabledMetricList.item(i);
+                Metric metric = new Metric();
+                NamedNodeMap attributes = enabledMetric.getAttributes();
+
+                String name = attributes.getNamedItem("name").getTextContent();
+                metric.setName(name);
+
+                Node collectDeltaNode = attributes.getNamedItem("collectDelta");
+                if (collectDeltaNode != null) {
+                    Boolean collectDelta = Boolean.valueOf(collectDeltaNode.getTextContent());
+                    metric.setCollectDelta(collectDelta);
+                }
+
+                Node displayNameNode = attributes.getNamedItem("displayName");
+                if (displayNameNode != null) {
+                    metric.setDisplayName(displayNameNode.getTextContent());
+                }
+
+                enabledMetrics.add(metric);
             }
             return enabledMetrics;
         } catch (FileNotFoundException e) {
@@ -174,5 +204,37 @@ public class VarnishMonitor extends AManagedMonitor {
                 .build();
         return Executors.newFixedThreadPool(numOfThreads,
                 threadFactory);
+    }
+
+    /**
+     * Returns metric value from cache
+     *
+     * @param metricName
+     * @return
+     */
+    public Long getDeltaMetric(String metricName) {
+        return previousMetricsMap.getIfPresent(metricName);
+    }
+
+    /**
+     * Adds metric to cache
+     *
+     * @param name
+     * @param metricValue
+     */
+    public void addDeltaMetric(String name, Long metricValue) {
+        previousMetricsMap.put(name, metricValue);
+    }
+
+    /**
+     * Removes metric from the cache
+     *
+     * @param metricName
+     */
+    public void deleteDeltaMetric(String metricName) {
+        if (previousMetricsMap.size() > 0) {
+            previousMetricsMap.invalidate(metricName);
+        }
+
     }
 }
