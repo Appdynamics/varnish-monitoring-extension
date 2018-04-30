@@ -339,7 +339,8 @@ public class VarnishWrapper implements Runnable {
      */
     private String constructVarnishStatsURL() {
         return new StringBuilder()
-                .append("http://")
+                .append(varnish.getScheme())
+                .append("://")
                 .append(varnish.getHost())
                 .append(":")
                 .append(varnish.getPort())
